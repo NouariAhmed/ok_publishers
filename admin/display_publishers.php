@@ -23,12 +23,28 @@ $startIndex = ($currentPage - 1) * $itemsPerPage;
 $result = mysqli_query($conn, "SELECT * FROM $table LIMIT $startIndex, $itemsPerPage");
 $items = mysqli_fetch_all($result, MYSQLI_ASSOC);
 
-// Get the selected publisher type and country from the query parameters
+// Get the selected publisher type, country, language specialization, and specialization from the query parameters
 $selectedPublisherType = isset($_GET['publisherType']) ? $_GET['publisherType'] : 'all';
 $selectedCountry = isset($_GET['countryFilter']) ? $_GET['countryFilter'] : 'all';
+$selectedPublisherLanguage = isset($_GET['publisherLanguage']) ? $_GET['publisherLanguage'] : 'all';
+$selectedPublisherSpecialization = isset($_GET['publisherSpecialization']) ? $_GET['publisherSpecialization'] : 'all';
 
-// Construct the SQL query to count filtered items
-$sqlCount = "SELECT COUNT(*) AS total_filtered_items FROM $table AS p WHERE 1 = 1";
+$sessionUserId = $_SESSION['id']; 
+$userRole = $_SESSION['role']; 
+
+if ($userRole === 'admin') {
+        // Construct the SQL query to count filtered items
+        $sqlCount = "SELECT COUNT(*) AS total_filtered_items FROM $table AS p
+        LEFT JOIN countries AS c ON p.country_id = c.id
+        LEFT JOIN publisher_types AS pt ON p.publisher_type_id = pt.id
+        WHERE 1 = 1";
+} elseif ($userRole === 'member') {
+   // Construct the SQL query to count filtered items
+   $sqlCount = "SELECT COUNT(*) AS total_filtered_items FROM $table AS p
+   LEFT JOIN countries AS c ON p.country_id = c.id
+   LEFT JOIN publisher_types AS pt ON p.publisher_type_id = pt.id
+          WHERE p.inserted_by = $sessionUserId";
+}
 
 // Initialize an array to store bind values and types
 $bindParams = [];
@@ -48,6 +64,32 @@ if ($selectedCountry !== 'all') {
     $bindParams[] = &$selectedCountry;
 }
 
+// Check if a specific publisher language specialization is selected
+if ($selectedPublisherLanguage !== 'all') {
+    // Check if the specialization value is 1 (indicating specialization is present)
+    if ($selectedPublisherLanguage === 'arabic_lan') {
+        $sqlCount .= " AND p.$selectedPublisherLanguage = 1";
+    } else {
+        // For other specializations, assume the value should be 1
+        $sqlCount .= " AND p.$selectedPublisherLanguage = ?";
+        $bindTypes .= 'i'; // Assuming specialization values are integers
+        $bindParams[] = 1;
+    }
+}
+
+// Check if a specific publisher specialization is selected
+if ($selectedPublisherSpecialization !== 'all') {
+    // Check if the specialization value is 1 (indicating specialization is present)
+    if ($selectedPublisherSpecialization === 'children') {
+        $sqlCount .= " AND p.$selectedPublisherSpecialization = 1";
+    } else {
+        // For other specializations, assume the value should be 1
+        $sqlCount .= " AND p.$selectedPublisherSpecialization = ?";
+        $bindTypes .= 'i'; // Assuming specialization values are integers
+        $bindParams[] = 1;
+    }
+}
+
 // Prepare and execute the count query
 $countStmt = mysqli_prepare($conn, $sqlCount);
 
@@ -63,13 +105,23 @@ $totalFilteredItems = $countRow['total_filtered_items'];
 
 // Calculate Total Pages
 $totalPages = ceil($totalFilteredItems / $itemsPerPage);
-
+if ($userRole === 'admin') {
 // Construct the main SQL query for pagination
-$sql = "SELECT p.*
+$sql = "SELECT p.*, c.arabic_countries, pt.publisher_type
         FROM publishers AS p
+        LEFT JOIN countries AS c ON p.country_id = c.id
+        LEFT JOIN publisher_types AS pt ON p.publisher_type_id = pt.id
         WHERE 1 = 1";
+} elseif ($userRole === 'member') {
+        // Construct the main SQL query for pagination
+        $sql = "SELECT p.*, c.arabic_countries, pt.publisher_type
+        FROM publishers AS p
+        LEFT JOIN countries AS c ON p.country_id = c.id
+        LEFT JOIN publisher_types AS pt ON p.publisher_type_id = pt.id
+        WHERE p.inserted_by = $sessionUserId";
+}
 
-// Initialize an array to store bind values and types
+// Re-initialize the array to store bind values and types
 $bindParams = [];
 $bindTypes = '';
 
@@ -85,6 +137,32 @@ if ($selectedCountry !== 'all') {
     $sql .= " AND p.country_id = ?";
     $bindTypes .= 'i'; // Assuming country_id is an integer
     $bindParams[] = &$selectedCountry;
+}
+
+// Check if a specific publisher language specialization is selected
+if ($selectedPublisherLanguage !== 'all') {
+    // Check if the specialization value is 1 (indicating specialization is present)
+    if ($selectedPublisherLanguage === 'arabic_lan') {
+        $sql .= " AND p.$selectedPublisherLanguage = 1";
+    } else {
+        // For other specializations, assume the value should be 1
+        $sql .= " AND p.$selectedPublisherLanguage = ?";
+        $bindTypes .= 'i'; // Assuming specialization values are integers
+        $bindParams[] = 1;
+    }
+}
+
+// Check if a specific publisher specialization is selected
+if ($selectedPublisherSpecialization !== 'all') {
+    // Check if the specialization value is 1 (indicating specialization is present)
+    if ($selectedPublisherSpecialization === 'children') {
+        $sql .= " AND p.$selectedPublisherSpecialization = 1";
+    } else {
+        // For other specializations, assume the value should be 1
+        $sql .= " AND p.$selectedPublisherSpecialization = ?";
+        $bindTypes .= 'i'; // Assuming specialization values are integers
+        $bindParams[] = 1;
+    }
 }
 
 $sql .= " ORDER BY p.id DESC";
@@ -105,6 +183,7 @@ $result = mysqli_stmt_get_result($stmt);
 
 // Fetch the items for the current page
 $items = mysqli_fetch_all($result, MYSQLI_ASSOC);
+
 
 include('header.php');
 ?>
@@ -139,7 +218,7 @@ include('header.php');
             <h5 class="mb-3">فلترة</h5>
            <div class="input-group input-group-outline my-3">
                 <select class="form-control" id="publisherType" name="publisherType">
-                    <option value="all" <?php echo $selectedPublisherType === 'all' ? 'selected' : ''; ?>>-- All publisher Types --</option>
+                    <option value="all" <?php echo $selectedPublisherType === 'all' ? 'selected' : ''; ?>>-- جميع الأصناف --</option>
                     <?php
                     $pubTypeQuery = "SELECT id, publisher_type FROM publisher_types";
                     $pubtypeResult = mysqli_query($conn, $pubTypeQuery);
@@ -154,7 +233,7 @@ include('header.php');
            </div>
            <div class="input-group input-group-outline my-3">
             <select class="form-control" id="countryFilter" name="countryFilter">
-              <option value="all" <?php echo $selectedCountry === 'all' ? 'selected' : ''; ?>>-- All Countries --</option>
+              <option value="all" <?php echo $selectedCountry === 'all' ? 'selected' : ''; ?>>-- جميع الدول --</option>
               <?php
               // Retrieve and populate the country options from your countries table
               $countryQuery = "SELECT id, arabic_countries FROM countries";
@@ -170,15 +249,25 @@ include('header.php');
          </div>
 
             <div class="input-group input-group-outline my-3">
-
+              <select class="form-control" id="publisherSpecialization" name="publisherSpecialization">
+                  <option value="all" <?php echo $selectedPublisherSpecialization === 'all' ? 'selected' : ''; ?>>-- كل التخصصات --</option>
+                  <option value="semi_school" <?php echo $selectedPublisherSpecialization === 'semi_school' ? 'selected' : ''; ?>>شبه مدرسية</option>
+                  <option value="university" <?php echo $selectedPublisherSpecialization === 'university' ? 'selected' : ''; ?>>جامعية</option>
+                  <option value="children" <?php echo $selectedPublisherSpecialization === 'children' ? 'selected' : ''; ?>>أطفال</option>
+                  <option value="novel" <?php echo $selectedPublisherSpecialization === 'novel' ? 'selected' : ''; ?>>رواية</option>
+              </select>
             </div>
-            <div class="input-group input-group-outline my-3">
-  
-</div>
 
-<div class="input-group input-group-outline my-3">
-   
-</div>
+            <div class="input-group input-group-outline my-3">
+              <select class="form-control" id="publisherLanguage" name="publisherLanguage">
+                  <option value="all" <?php echo $selectedPublisherLanguage === 'all' ? 'selected' : ''; ?>>-- جميع اللغات --</option>
+                  <option value="arabic_lan" <?php echo $selectedPublisherLanguage === 'arabic_lan' ? 'selected' : ''; ?>>العربية</option>
+                  <option value="english_lan" <?php echo $selectedPublisherLanguage === 'english_lan' ? 'selected' : ''; ?>>الإنجليزية</option>
+                  <option value="french_lan" <?php echo $selectedPublisherLanguage === 'french_lan' ? 'selected' : ''; ?>>الفرنسية</option>
+                  <option value="other_lan" <?php echo $selectedPublisherLanguage === 'other_lan' ? 'selected' : ''; ?>>أخرى</option>
+              </select>
+            </div>
+
           <button type="submit"  class="btn bg-gradient-primary" >فلترة</button> 
           <button type="button" class="btn btn-secondary" id="clearFilter">مسح الفلتر</button>
 
@@ -282,7 +371,7 @@ include('header.php');
                         <p class="text-xs text-secondary mb-0"><?php echo htmlspecialchars($item["email"]);?></p>
                       </td>
                       <td class="align-middle text-sm">
-                        <h6 class="mb-0 text-sm"><?php //echo htmlspecialchars($item["arabic_countries"]); ?></h6>
+                        <h6 class="mb-0 text-sm"><?php echo htmlspecialchars($item["arabic_countries"]); ?></h6>
                       </td>
                       <td class="align-middle text-sm">
                       <h6 class="mb-0 text-sm"><?php
@@ -325,6 +414,8 @@ include('header.php');
                       </td>
                       <td class="align-middle text-sm">
                         <h6 class="mb-0 text-sm"><?php echo htmlspecialchars(getPublisherType($item));?></h6>
+                        <p class="text-xs text-warning mb-0 text-bold"><?php echo htmlspecialchars($item["publisher_type"]); ?></p>
+
                       </td>
                       <td class="align-middle text-sm">
                         <h6 class="mb-0 text-sm"><?php echo htmlspecialchars(getPublisherLan($item));?></h6>
@@ -347,7 +438,7 @@ include('header.php');
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
-                                    <h5 class="modal-title" id="modalTitle">ملاحظات خاصة بمكتبة: <?php echo $item['library_name']; ?></h5>
+                                    <h5 class="modal-title" id="modalTitle">ملاحظات خاصة بدار النشر: <?php echo $item['publisher_name']; ?></h5>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <div class="modal-body">
@@ -370,10 +461,10 @@ include('header.php');
                     </div>
                 </td>          
                       <td class="align-middle text-center">
-                        <a href="update_library.php?id=<?php //echo htmlspecialchars($item["id"]); ?>&states=<?php //echo htmlspecialchars($item["states"]); ?>&province=<?php //echo htmlspecialchars($item["provinces"]); ?>&city=<?php //echo htmlspecialchars($item["cities"]); ?>" class="btn badge-sm bg-gradient-primary">
+                        <a href="update_publisher.php?id=<?php echo htmlspecialchars($item["id"]); ?>" class="btn badge-sm bg-gradient-primary">
                         <i class="material-icons-round align-middle" style="font-size: 18px;">edit</i>
                         </a>
-                        <a href="delete_library.php?id=<?php //echo htmlspecialchars($item["id"]);?>" class="btn badge-sm bg-gradient-danger"> <i class="material-icons-round align-middle" style="font-size: 18px;">delete</i></a>
+                        <a href="delete_publisher.php?id=<?php echo htmlspecialchars($item["id"]);?>" class="btn badge-sm bg-gradient-danger"> <i class="material-icons-round align-middle" style="font-size: 18px;">delete</i></a>
                       </td>
                     </tr>
                     <?php
@@ -389,6 +480,25 @@ include('header.php');
           </div>
         </div>
       </div>
+      <script>
+document.addEventListener("DOMContentLoaded", function() {
+    const publisherTypeDropdown = document.getElementById("publisherType");
+    const countryFilterDropdown = document.getElementById("countryFilter");
+    const publisherSpecializationDropdown = document.getElementById("publisherSpecialization");
+    const publisherLanguageDropdown = document.getElementById("publisherLanguage");
+
+    // Add event listener to the Clear Filter button
+    const clearFilterButton = document.getElementById("clearFilter");
+    clearFilterButton.addEventListener("click", function() {
+        // Clear selected values and disable dropdowns
+        publisherTypeDropdown.value = "all";
+        countryFilterDropdown.value = "all";
+        publisherSpecializationDropdown.value = "all";
+        publisherLanguageDropdown.value = "all";
+    });
+});
+
+</script>
      <?php
  mysqli_close($conn);
 include('footer.php');

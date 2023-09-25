@@ -152,26 +152,64 @@ include('header.php');
             position: absolute;
         }
     </style>
-    <script>
-        var progressBar = document.getElementById("myProgressBar");
-        var progressText = document.querySelector(".progress-text");
-        var successMessage = document.getElementById("successMessage");
+<script>
+    var progressContainer = document.querySelector(".progress-container");
+    var progressBar = document.getElementById("myProgressBar");
+    var progressText = document.querySelector(".progress-text");
+    var successMessage = document.getElementById("successMessage");
 
-        // Simulate progress
-        var progress = 0;
-        var interval = setInterval(function () {
-            progress += 10;
-            progressBar.style.width = progress + "%";
-            progressText.textContent = "يتم إضافة دار النشر " + progress + "%";
-            if (progress >= 100) {
-                clearInterval(interval);
-                progressBar.style.display = "none";
-                progressText.style.display = "none";
-                successMessage.style.display = "block";
-            }
-        }, 250);
-    </script>
-<?php unset($_SESSION['register_success_msg']); }  ?>
+    // Simulate progress
+    var progress = 0;
+    var interval = setInterval(function () {
+        progress += 10;
+        progressBar.style.width = progress + "%";
+        progressText.textContent = "يتم إضافة دار النشر " + progress + "%";
+        if (progress >= 100) {
+            clearInterval(interval);
+            progressContainer.style.display = "none"; // Hide the entire progress container
+            successMessage.style.display = "block";
+        }
+    }, 250);
+</script>
+ <?php 
+$sessionUserId = $_SESSION['id']; 
+$userRole = $_SESSION['role'];
+
+// Check if the user has reached 100 libraries
+$userPublisherCount = 5; 
+if ($userRole === 'admin') {
+    $sql = "SELECT COUNT(*) AS publisher_count FROM publishers WHERE inserted_by = $sessionUserId";
+    $result = mysqli_query($conn, $sql);
+        $row = mysqli_fetch_assoc($result);
+        $publisherCount = $row['publisher_count'];
+        if ($publisherCount >= $userPublisherCount || $publisherCount % 100 == 0) {
+            ?>
+                <div class="modal fade" id="congratulationModal" tabindex="-1" aria-labelledby="congratulationModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="congratulationModalLabel">تهانينا!</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                لقد قمت بإضافة <?php echo $publisherCount; ?> دار نشر. 🎉 تهانينا على إنجازك!
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php
+
+            // Display a JavaScript function to show the modal
+            echo '<script>';
+            echo 'jQuery(document).ready(function() {';
+            echo '   jQuery("#congratulationModal").modal("show");';
+            echo '});';
+            echo '</script>';
+        }
+} unset($_SESSION['register_success_msg']); }  ?>
 
         <form role="form" action="" method="post" enctype="multipart/form-data">
         <h4 class="mb-3">إضافة دار نشر</h4>
@@ -180,7 +218,7 @@ include('header.php');
                     <div class="d-flex">
                         <div class="input-group input-group-outline m-3">
                             <select class="form-control" id="country_id" name="country_id" required>
-                                <option value="" disabled selected>-- اختر دولة دار النشر --</option>
+                                <option value="" disabled selected>-- اختر دولة دار النشر *  --</option>
                                 <?php
                                 // Fetch library publisher_specialties from the database
                                 $sql_fetch_countries = "SELECT * FROM countries";
@@ -194,7 +232,7 @@ include('header.php');
 
                     <div class="input-group input-group-outline my-3">
                     <select class="form-control" id="publisher_type_id" name="publisher_type_id" required>
-                            <option value="" disabled selected>-- اختر نوع دار النشر --</option>
+                            <option value="" disabled selected>-- اختر نوع دار النشر *  --</option>
                             <?php
                             // Fetch publisher types from the database
                             $sql_fetch_publisher_types = "SELECT * FROM publisher_types";
@@ -210,7 +248,7 @@ include('header.php');
                 <div class="d-flex">
                     <div class="input-group input-group-outline m-3">
                         <?php if (empty($publisher_name)): ?>
-                            <label for="publisher_name" class="form-label">اسم دار النشر</label>
+                            <label for="publisher_name" class="form-label">اسم دار النشر *  </label>
                         <?php endif; ?>
                         <input type="text" class="form-control <?php echo (!empty($publisher_name_err)) ? 'is-invalid' : ''; ?>"
                             id="publisher_name" name="publisher_name" value="<?php echo $publisher_name; ?>" required
@@ -233,7 +271,7 @@ include('header.php');
             <div class="d-flex">
                 <div class="input-group input-group-outline m-3">
                     <?php if (empty($phone)): ?>
-                        <label for="phone" class="form-label">الهاتف</label>
+                        <label for="phone" class="form-label">الهاتف *  </label>
                     <?php endif; ?>
                     <input type="text" class="form-control <?php echo (!empty($phone_err)) ? 'is-invalid' : ''; ?>"
                           id="phone" name="phone" value="<?php echo $phone; ?>" required
